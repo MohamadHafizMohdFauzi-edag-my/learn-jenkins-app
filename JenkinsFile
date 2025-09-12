@@ -92,7 +92,7 @@ pipeline {
             }
 
             environment{
-                CI_ENVIRONMENT_URL = 'https://merry-palmier-a65a74.netlify.app'
+                CI_ENVIRONMENT_URL = "${env.STAGING_URL}"
             }
 
             steps {
