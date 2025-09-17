@@ -1,79 +1,110 @@
 pipeline {
-    agent any
+    agent any // Run this pipeline on any available agent
 
-    environment{
+    environment {
+        // Set Netlify site ID and auth token from Jenkins credentials
         NETLIFY_SITE_ID = 'af5af17d-54b5-4d8c-9cf1-2570d5e08789'
         NETLIFY_AUTH_TOKEN = credentials('netlify-token')
     }
 
     stages {
         stage('Build') {
-            agent{
-                docker{
-                    image 'node:18-alpine'
-                    reuseNode true
+            agent {
+                docker {
+                    image 'node:18-alpine' // Use lightweight Node.js Docker image
+                    reuseNode true // Reuse the workspace across stages
                 }
             }
             steps {
-                sh'''
+                sh '''
+                    # List files in workspace
                     ls -la
+
+                    # Show Node and npm versions
                     node --version
                     npm --version
+
+                    # Install dependencies using clean install
                     npm ci
+
+                    # Build the project
                     npm run build
                     echo 'build completed'
+
+                    # List files after build
                     ls -la
                 '''
             }
         }
 
-        stage('Tests'){
-            parallel{
+        stage('Tests') {
+            parallel {
                 stage('Unit Test') {
-                    agent{
-                        docker{
-                            image 'node:18-alpine'
+                    agent {
+                        docker {
+                            image 'node:18-alpine' // Use same Node.js image for unit tests
                             reuseNode true
                         }
                     }
                     steps {
-                        sh'''
+                        sh '''
                             echo 'small change'
                             echo 'Test stage'
+
+                            # Check if build output exists
                             test -f build/index.html
+
+                            # Run unit tests (e.g., Jest)
                             npm test
                         '''
                     }
-                    post{
-                        always{
+                    post {
+                        always {
+                            // Publish test results even if tests fail
                             junit 'jest-results/junit.xml'
                         }
                     }
                 }
+
                 stage('E2E') {
-                    agent{
-                        docker{
-                            image 'mcr.microsoft.com/playwright:v1.39.0-jammy'
+                    agent {
+                        docker {
+                            image 'mcr.microsoft.com/playwright:v1.39.0-jammy' // Use Playwright image for browser testing
                             reuseNode true
-                            /* if want to run on root admin
-                            args '-u root:root'
-                            */
+                            // args '-u root:root' // Uncomment if root access is needed
                         }
                     }
                     steps {
-                        sh'''
+                        sh '''
                             echo 'E2E stage'
+
+                            # Install static server
                             npm install serve
+
+                            # Serve the build folder
                             node_modules/.bin/serve -s build &
+
+                            # Wait for server to start
                             sleep 10
-                            # npx playwright install
-                            # npx playwright test
+
+                            # Run Playwright end-to-end tests
                             npx playwright test --reporter=html
                         '''
                     }
-                    post{
-                        always{
-                            publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, icon: '', keepAll: false, reportDir: 'playwright-report', reportFiles: 'index.html', reportName: 'Playwright Local Report', reportTitles: '', useWrapperFileDirectly: true])
+                    post {
+                        always {
+                            // Publish Playwright HTML report
+                            publishHTML([
+                                allowMissing: false,
+                                alwaysLinkToLastBuild: false,
+                                icon: '',
+                                keepAll: false,
+                                reportDir: 'playwright-report',
+                                reportFiles: 'index.html',
+                                reportName: 'Playwright Local Report',
+                                reportTitles: '',
+                                useWrapperFileDirectly: true
+                            ])
                         }
                     }
                 }
@@ -81,35 +112,57 @@ pipeline {
         }
 
         stage('Deploy & Staging E2E') {
-            agent{
-                docker{
-                    image 'mcr.microsoft.com/playwright:v1.39.0-jammy'
+            agent {
+                docker {
+                    image 'mcr.microsoft.com/playwright:v1.39.0-jammy' // Use Playwright image again
                     reuseNode true
-                    /* if want to run on root admin
-                    args '-u root:root'
-                    */
+                    // args '-u root:root' // Optional root access
                 }
             }
 
-            environment{
+            environment {
+                // Placeholder for staging URL (not dynamically set here)
                 CI_ENVIRONMENT_URL = "STAGING_URL_TO_BE_SET"
             }
 
             steps {
-                sh'''
+                sh '''
                     echo 'Staging E2E'
+
+                    # Install Netlify CLI and node-jq for JSON parsing
                     npm install netlify-cli@20.1.1 node-jq
+
+                    # Show Netlify CLI version
                     node_modules/.bin/netlify --version
+
+                    # Show Netlify site status
                     echo "deploying to staging. Site ID : $NETLIFY_SITE_ID"
                     node_modules/.bin/netlify status
+
+                    # Deploy to Netlify and save output
                     node_modules/.bin/netlify deploy --dir=build --json > deploy-output.json
+
+                    # Extract deploy URL from JSON output
                     CI_ENVIRONMENT_URL=$(node_modules/.bin/node-jq -r '.deploy_url' deploy-output.json)
+
+                    # Run Playwright tests (note: baseURL not passed here)
                     npx playwright test --reporter=html
                 '''
             }
-            post{
-                always{
-                    publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, icon: '', keepAll: false, reportDir: 'playwright-report', reportFiles: 'index.html', reportName: 'Staging E2E Report', reportTitles: '', useWrapperFileDirectly: true])
+            post {
+                always {
+                    // Publish staging E2E report
+                    publishHTML([
+                        allowMissing: false,
+                        alwaysLinkToLastBuild: false,
+                        icon: '',
+                        keepAll: false,
+                        reportDir: 'playwright-report',
+                        reportFiles: 'index.html',
+                        reportName: 'Staging E2E Report',
+                        reportTitles: '',
+                        useWrapperFileDirectly: true
+                    ])
                 }
             }
         }
@@ -117,46 +170,61 @@ pipeline {
         stage('Approval') {
             steps {
                 timeout(time: 15, unit: 'MINUTES') {
-                    // some block
+                    // Manual approval step before production deployment
                     input message: 'Do you wish to deploy to production??', ok: 'Yes, i am sure and ready for deploy'
                 }
             }
         }
 
         stage('Deploy & Prod E2E') {
-            agent{
-                docker{
-                    image 'mcr.microsoft.com/playwright:v1.39.0-jammy'
+            agent {
+                docker {
+                    image 'mcr.microsoft.com/playwright:v1.39.0-jammy' // Use Playwright image again
                     reuseNode true
-                    /* if want to run on root admin
-                    args '-u root:root'
-                    */
+                    // args '-u root:root' // Optional root access
                 }
             }
 
-            environment{
+            environment {
+                // Set production URL explicitly
                 CI_ENVIRONMENT_URL = 'https://merry-palmier-a65a74.netlify.app'
             }
 
             steps {
-                sh'''
+                sh '''
                     echo 'Production E2E stage'
-                    # npm install serve
-                    # node_modules/.bin/serve -s build &
-                    # sleep 10
-                    # npx playwright install
-                    # npx playwright test
+
+                    # Install Netlify CLI
                     npm install netlify-cli@20.1.1
+
+                    # Show Netlify CLI version
                     node_modules/.bin/netlify --version
+
+                    # Show Netlify site status
                     echo "deploying to production. Site ID : $NETLIFY_SITE_ID"
                     node_modules/.bin/netlify status
+
+                    # Deploy to production
                     node_modules/.bin/netlify deploy --dir=build --prod
+
+                    # Run Playwright tests
                     npx playwright test --reporter=html
                 '''
             }
-            post{
-                always{
-                    publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, icon: '', keepAll: false, reportDir: 'playwright-report', reportFiles: 'index.html', reportName: 'Prod E2E Report', reportTitles: '', useWrapperFileDirectly: true])
+            post {
+                always {
+                    // Publish production E2E report
+                    publishHTML([
+                        allowMissing: false,
+                        alwaysLinkToLastBuild: false,
+                        icon: '',
+                        keepAll: false,
+                        reportDir: 'playwright-report',
+                        reportFiles: 'index.html',
+                        reportName: 'Prod E2E Report',
+                        reportTitles: '',
+                        useWrapperFileDirectly: true
+                    ])
                 }
             }
         }
