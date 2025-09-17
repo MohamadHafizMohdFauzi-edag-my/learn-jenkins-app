@@ -109,7 +109,7 @@ pipeline {
                     STAGING_URL=$(npx node-jq -r '.deploy_url' deploy-output.json)
                     echo "✅ Staging URL: $STAGING_URL"
 
-                    BASE_URL=$STAGING_URL npx playwright test --reporter=html
+                    CI_ENVIRONMENT_URL=$STAGING_URL npx playwright test --reporter=html
 
                     # Run Playwright tests against staging
                     npx playwright test --reporter=html --project=staging --base-url=$STAGING_URL
