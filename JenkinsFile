@@ -81,54 +81,35 @@ pipeline {
         }
 
         stage('Deploy & Staging E2E') {
-            agent {
-                docker {
+            agent{
+                docker{
                     image 'mcr.microsoft.com/playwright:v1.39.0-jammy'
                     reuseNode true
+                    /* if want to run on root admin
+                    args '-u root:root'
+                    */
                 }
             }
 
-            steps {
-                sh '''
-                    echo '🔧 Starting Staging E2E Deployment'
-
-                    # Install required tools
-                    npm install netlify-cli@20.1.1 node-jq
-
-                    # Confirm tools are available
-                    echo "Netlify CLI version:"
-                    node_modules/.bin/netlify --version
-
-                    echo "Deploying to staging. Site ID: $NETLIFY_SITE_ID"
-                    node_modules/.bin/netlify status
-
-                    # Deploy to Netlify and capture output
-                    node_modules/.bin/netlify deploy --dir=build --json > deploy-output.json
-
-                    # Extract deploy URL using node-jq
-                    STAGING_URL=$(npx node-jq -r '.deploy_url' deploy-output.json)
-                    echo "✅ Staging URL: $STAGING_URL"
-
-                    BASE_URL=$STAGING_URL npx playwright test --reporter=html
-
-                    # Run Playwright tests against staging
-                    npx playwright test --reporter=html --project=staging --base-url=$STAGING_URL
-                '''
+            environment{
+                CI_ENVIRONMENT_URL = "STAGING_URL_TO_BE_SET"
             }
 
-            post {
-                always {
-                    publishHTML([
-                        allowMissing: false,
-                        alwaysLinkToLastBuild: false,
-                        icon: '',
-                        keepAll: false,
-                        reportDir: 'playwright-report',
-                        reportFiles: 'index.html',
-                        reportName: 'Staging E2E Report',
-                        reportTitles: '',
-                        useWrapperFileDirectly: true
-                    ])
+            steps {
+                sh'''
+                    echo 'Staging E2E'
+                    npm install netlify-cli@20.1.1 node-jq
+                    node_modules/.bin/netlify --version
+                    echo "deploying to staging. Site ID : $NETLIFY_SITE_ID"
+                    node_modules/.bin/netlify status
+                    node_modules/.bin/netlify deploy --dir=build --json > deploy-output.json
+                    CI_ENVIRONMENT_URL=$(node_modules/.bin/node-jq -r '.deploy_url' deploy-output.json)
+                    npx playwright test --reporter=html
+                '''
+            }
+            post{
+                always{
+                    publishHTML([allowMissing: false, alwaysLinkToLastBuild: false, icon: '', keepAll: false, reportDir: 'playwright-report', reportFiles: 'index.html', reportName: 'Staging E2E Report', reportTitles: '', useWrapperFileDirectly: true])
                 }
             }
         }
