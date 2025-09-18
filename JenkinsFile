@@ -131,8 +131,8 @@ pipeline {
                 sh '''
                     echo 'Staging E2E'
 
-                    # Install Netlify CLI and node-jq for JSON parsing
-                    # npm install netlify-cli@20.1.1 node-jq
+                    # Install Netlify CLI and jq for JSON parsing
+                    # npm install netlify-cli@20.1.1 jq
 
                     # Show Netlify CLI version
                     netlify --version
@@ -145,7 +145,7 @@ pipeline {
                     netlify deploy --dir=build --json > deploy-output.json
 
                     # Extract deploy URL from JSON output
-                    CI_ENVIRONMENT_URL=$(node-jq -r '.deploy_url' deploy-output.json)
+                    CI_ENVIRONMENT_URL=$(jq -r '.deploy_url' deploy-output.json)
 
                     # Run Playwright tests (note: baseURL not passed here)
                     npx playwright test --reporter=html
