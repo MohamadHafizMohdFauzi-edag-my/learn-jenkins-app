@@ -3,8 +3,9 @@ pipeline {
 
     stages {
 
-        stage('Build Docker Image'){
+        stage('Build Docker Image') {
             steps {
+                // Build a Docker image named 'my-playwright' using the Dockerfile in the current directory
                 sh 'docker build -t my-playwright .'
             }
         }
