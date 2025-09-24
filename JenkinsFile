@@ -6,6 +6,7 @@ pipeline {
         // NETLIFY_SITE_ID = 'af5af17d-54b5-4d8c-9cf1-2570d5e08789'
         // NETLIFY_AUTH_TOKEN = credentials('netlify-token') // Securely fetch Netlify token from Jenkins credentials
         REACT_APP_VERSION = "1.0.$BUILD_ID" // Dynamically set app version using Jenkins build ID
+        AWS_DEFAULT_REGION = 'ap-southeast-1'
     }
 
     stages {
