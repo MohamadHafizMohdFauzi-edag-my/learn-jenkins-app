@@ -18,9 +18,9 @@ pipeline {
                     args "--entrypoint=''" // Override default entrypoint to allow shell commands
                 }
             }
-            environment {
-                // AWS_S3_BUCKET = 'learn-jenkins-20250922' // Target S3 bucket name
-            }
+            // environment {
+            //     // AWS_S3_BUCKET = 'learn-jenkins-20250922' // Target S3 bucket name
+            // }
             steps {
                 withCredentials([usernamePassword(credentialsId: 'my-aws', passwordVariable: 'AWS_SECRET_ACCESS_KEY', usernameVariable: 'AWS_ACCESS_KEY_ID')]) {
                     sh '''
