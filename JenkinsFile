@@ -16,7 +16,7 @@ pipeline {
                 docker {
                     image 'amazon/aws-cli' // Use AWS CLI Docker image
                     reuseNode true // Reuse workspace
-                    args "--entrypoint=''" // Override default entrypoint to allow shell commands
+                    args "-u root --entrypoint=''" // Override default entrypoint to allow shell commands
                 }
             }
             // environment {
@@ -30,9 +30,13 @@ pipeline {
                         # Sync build directory to S3 bucket
                         # aws s3 sync build s3://$AWS_S3_BUCKET
 
-                        aws ecs register-task-definition --cli-input-json file://aws/task-definition-prod.json
+                        yum install jq -y
 
-                        aws ecs update-service --cluster admired-gorilla-vr5k7i --service LearnJenkinsApp-TaskDefinition-Prod-service-edo5pfjw --task-definition LearnJenkinsApp-TaskDefinition-Prod:2
+                        LATEST_TD_REVISION=$(aws ecs register-task-definition --cli-input-json file://aws/task-definition-prod.json | jq '.taskDefinition.revision')
+
+                        echo $LATEST_TD_REVISION
+
+                        aws ecs update-service --cluster admired-gorilla-vr5k7i --service LearnJenkinsApp-TaskDefinition-Prod-service-edo5pfjw --task-definition LearnJenkinsApp-TaskDefinition-Prod:$LATEST_TD_REVISION
                     '''
                 }
             }
