@@ -3,12 +3,37 @@ pipeline {
 
     environment {
         // Set Netlify site ID and auth token from Jenkins credentials
-        NETLIFY_SITE_ID = 'af5af17d-54b5-4d8c-9cf1-2570d5e08789'
-        NETLIFY_AUTH_TOKEN = credentials('netlify-token') // Securely fetch Netlify token from Jenkins credentials
+        // NETLIFY_SITE_ID = 'af5af17d-54b5-4d8c-9cf1-2570d5e08789'
+        // NETLIFY_AUTH_TOKEN = credentials('netlify-token') // Securely fetch Netlify token from Jenkins credentials
         REACT_APP_VERSION = "1.0.$BUILD_ID" // Dynamically set app version using Jenkins build ID
     }
 
     stages {
+
+        stage('Deploy to AWS') {
+            agent {
+                docker {
+                    image 'amazon/aws-cli' // Use AWS CLI Docker image
+                    reuseNode true // Reuse workspace
+                    args "--entrypoint=''" // Override default entrypoint to allow shell commands
+                }
+            }
+            environment {
+                // AWS_S3_BUCKET = 'learn-jenkins-20250922' // Target S3 bucket name
+            }
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'my-aws', passwordVariable: 'AWS_SECRET_ACCESS_KEY', usernameVariable: 'AWS_ACCESS_KEY_ID')]) {
+                    sh '''
+                        aws --version # Display AWS CLI version
+
+                        # Sync build directory to S3 bucket
+                        # aws s3 sync build s3://$AWS_S3_BUCKET
+
+                        aws ecs register-task-definition --cli-input-json file://aws/task-definition-prod.json
+                    '''
+                }
+            }
+        }
 
         stage('Build') {
             agent {
@@ -39,158 +64,135 @@ pipeline {
             }
         }
 
-        stage('AWS') {
-            agent {
-                docker {
-                    image 'amazon/aws-cli' // Use AWS CLI Docker image
-                    reuseNode true // Reuse workspace
-                    args "--entrypoint=''" // Override default entrypoint to allow shell commands
-                }
-            }
-            environment {
-                AWS_S3_BUCKET = 'learn-jenkins-20250922' // Target S3 bucket name
-            }
-            steps {
-                withCredentials([usernamePassword(credentialsId: 'my-aws', passwordVariable: 'AWS_SECRET_ACCESS_KEY', usernameVariable: 'AWS_ACCESS_KEY_ID')]) {
-                    sh '''
-                        aws --version # Display AWS CLI version
+        // stage('Tests') {
+        //     parallel {
+        //         stage('Unit Test') {
+        //             agent {
+        //                 docker {
+        //                     image 'node:18-alpine' // Use same Node.js image for unit tests
+        //                     reuseNode true
+        //                 }
+        //             }
+        //             steps {
+        //                 sh '''
+        //                     echo 'small change' # Placeholder for triggering pipeline
+        //                     echo 'Test stage' # Indicate start of test stage
 
-                        # Sync build directory to S3 bucket
-                        aws s3 sync build s3://$AWS_S3_BUCKET
-                    '''
-                }
-            }
-        }
+        //                     # Check if build output exists
+        //                     test -f build/index.html
 
-        stage('Tests') {
-            parallel {
-                stage('Unit Test') {
-                    agent {
-                        docker {
-                            image 'node:18-alpine' // Use same Node.js image for unit tests
-                            reuseNode true
-                        }
-                    }
-                    steps {
-                        sh '''
-                            echo 'small change' # Placeholder for triggering pipeline
-                            echo 'Test stage' # Indicate start of test stage
+        //                     # Run unit tests (e.g., Jest)
+        //                     npm test
+        //                 '''
+        //             }
+        //             post {
+        //                 always {
+        //                     // Publish test results even if tests fail
+        //                     junit 'jest-results/junit.xml'
+        //                 }
+        //             }
+        //         }
 
-                            # Check if build output exists
-                            test -f build/index.html
+        //         stage('E2E') {
+        //             agent {
+        //                 docker {
+        //                     image 'my-playwright' // Use Playwright image for browser testing
+        //                     reuseNode true
+        //                     // args '-u root:root' // Uncomment if root access is needed
+        //                 }
+        //             }
+        //             steps {
+        //                 sh '''
+        //                     echo 'E2E stage' # Indicate start of end-to-end testing
 
-                            # Run unit tests (e.g., Jest)
-                            npm test
-                        '''
-                    }
-                    post {
-                        always {
-                            // Publish test results even if tests fail
-                            junit 'jest-results/junit.xml'
-                        }
-                    }
-                }
+        //                     # Install static server
+        //                     # npm install serve
 
-                stage('E2E') {
-                    agent {
-                        docker {
-                            image 'my-playwright' // Use Playwright image for browser testing
-                            reuseNode true
-                            // args '-u root:root' // Uncomment if root access is needed
-                        }
-                    }
-                    steps {
-                        sh '''
-                            echo 'E2E stage' # Indicate start of end-to-end testing
+        //                     # Serve the build folder
+        //                     serve -s build &
 
-                            # Install static server
-                            # npm install serve
+        //                     # Wait for server to start
+        //                     sleep 10
 
-                            # Serve the build folder
-                            serve -s build &
+        //                     # Run Playwright end-to-end tests
+        //                     npx playwright test --reporter=html
+        //                 '''
+        //             }
+        //             post {
+        //                 always {
+        //                     // Publish Playwright HTML report
+        //                     publishHTML([
+        //                         allowMissing: false,
+        //                         alwaysLinkToLastBuild: false,
+        //                         icon: '',
+        //                         keepAll: false,
+        //                         reportDir: 'playwright-report',
+        //                         reportFiles: 'index.html',
+        //                         reportName: 'Playwright Local Report',
+        //                         reportTitles: '',
+        //                         useWrapperFileDirectly: true
+        //                     ])
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
 
-                            # Wait for server to start
-                            sleep 10
+        // stage('Deploy & Staging E2E') {
+        //     agent {
+        //         docker {
+        //             image 'my-playwright' // Use Playwright image again
+        //             reuseNode true
+        //             // args '-u root:root' // Optional root access
+        //         }
+        //     }
 
-                            # Run Playwright end-to-end tests
-                            npx playwright test --reporter=html
-                        '''
-                    }
-                    post {
-                        always {
-                            // Publish Playwright HTML report
-                            publishHTML([
-                                allowMissing: false,
-                                alwaysLinkToLastBuild: false,
-                                icon: '',
-                                keepAll: false,
-                                reportDir: 'playwright-report',
-                                reportFiles: 'index.html',
-                                reportName: 'Playwright Local Report',
-                                reportTitles: '',
-                                useWrapperFileDirectly: true
-                            ])
-                        }
-                    }
-                }
-            }
-        }
+        //     environment {
+        //         // Placeholder for staging URL (not dynamically set here)
+        //         CI_ENVIRONMENT_URL = "STAGING_URL_TO_BE_SET"
+        //     }
 
-        stage('Deploy & Staging E2E') {
-            agent {
-                docker {
-                    image 'my-playwright' // Use Playwright image again
-                    reuseNode true
-                    // args '-u root:root' // Optional root access
-                }
-            }
+        //     steps {
+        //         sh '''
+        //             echo 'Staging E2E' # Indicate staging test phase
 
-            environment {
-                // Placeholder for staging URL (not dynamically set here)
-                CI_ENVIRONMENT_URL = "STAGING_URL_TO_BE_SET"
-            }
+        //             # Install Netlify CLI and jq for JSON parsing
+        //             # npm install netlify-cli@20.1.1 jq
 
-            steps {
-                sh '''
-                    echo 'Staging E2E' # Indicate staging test phase
+        //             # Show Netlify CLI version
+        //             netlify --version
 
-                    # Install Netlify CLI and jq for JSON parsing
-                    # npm install netlify-cli@20.1.1 jq
+        //             # Show Netlify site status
+        //             echo "deploying to staging. Site ID : $NETLIFY_SITE_ID"
+        //             netlify status
 
-                    # Show Netlify CLI version
-                    netlify --version
+        //             # Deploy to Netlify and save output
+        //             netlify deploy --dir=build --json > deploy-output.json
 
-                    # Show Netlify site status
-                    echo "deploying to staging. Site ID : $NETLIFY_SITE_ID"
-                    netlify status
+        //             # Extract deploy URL from JSON output
+        //             CI_ENVIRONMENT_URL=$(jq -r '.deploy_url' deploy-output.json)
 
-                    # Deploy to Netlify and save output
-                    netlify deploy --dir=build --json > deploy-output.json
-
-                    # Extract deploy URL from JSON output
-                    CI_ENVIRONMENT_URL=$(jq -r '.deploy_url' deploy-output.json)
-
-                    # Run Playwright tests (note: baseURL not passed here)
-                    npx playwright test --reporter=html
-                '''
-            }
-            post {
-                always {
-                    // Publish staging E2E report
-                    publishHTML([
-                        allowMissing: false,
-                        alwaysLinkToLastBuild: false,
-                        icon: '',
-                        keepAll: false,
-                        reportDir: 'playwright-report',
-                        reportFiles: 'index.html',
-                        reportName: 'Staging E2E Report',
-                        reportTitles: '',
-                        useWrapperFileDirectly: true
-                    ])
-                }
-            }
-        }
+        //             # Run Playwright tests (note: baseURL not passed here)
+        //             npx playwright test --reporter=html
+        //         '''
+        //     }
+        //     post {
+        //         always {
+        //             // Publish staging E2E report
+        //             publishHTML([
+        //                 allowMissing: false,
+        //                 alwaysLinkToLastBuild: false,
+        //                 icon: '',
+        //                 keepAll: false,
+        //                 reportDir: 'playwright-report',
+        //                 reportFiles: 'index.html',
+        //                 reportName: 'Staging E2E Report',
+        //                 reportTitles: '',
+        //                 useWrapperFileDirectly: true
+        //             ])
+        //         }
+        //     }
+        // }
 
         // stage('Approval') {
         //     steps {
@@ -201,57 +203,57 @@ pipeline {
         //     }
         // }
 
-        stage('Deploy & Prod E2E') {
-            agent {
-                docker {
-                    image 'my-playwright' // Use Playwright image again
-                    reuseNode true
-                    // args '-u root:root' // Optional root access
-                }
-            }
+        // stage('Deploy & Prod E2E') {
+        //     agent {
+        //         docker {
+        //             image 'my-playwright' // Use Playwright image again
+        //             reuseNode true
+        //             // args '-u root:root' // Optional root access
+        //         }
+        //     }
 
-            environment {
-                // Set production URL explicitly
-                CI_ENVIRONMENT_URL = 'https://merry-palmier-a65a74.netlify.app'
-            }
+        //     environment {
+        //         // Set production URL explicitly
+        //         CI_ENVIRONMENT_URL = 'https://merry-palmier-a65a74.netlify.app'
+        //     }
 
-            steps {
-                sh '''
-                    echo 'Production E2E stage' # Indicate production test phase
+        //     steps {
+        //         sh '''
+        //             echo 'Production E2E stage' # Indicate production test phase
 
-                    # Install Netlify CLI
-                    # npm install netlify-cli@20.1.1
+        //             # Install Netlify CLI
+        //             # npm install netlify-cli@20.1.1
 
-                    # Show Netlify CLI version
-                    netlify --version
+        //             # Show Netlify CLI version
+        //             netlify --version
 
-                    # Show Netlify site status
-                    echo "deploying to production. Site ID : $NETLIFY_SITE_ID"
-                    netlify status
+        //             # Show Netlify site status
+        //             echo "deploying to production. Site ID : $NETLIFY_SITE_ID"
+        //             netlify status
 
-                    # Deploy to production
-                    netlify deploy --dir=build --prod
+        //             # Deploy to production
+        //             netlify deploy --dir=build --prod
 
-                    # Run Playwright tests
-                    npx playwright test --reporter=html
-                '''
-            }
-            post {
-                always {
-                    // Publish production E2E report
-                    publishHTML([
-                        allowMissing: false,
-                        alwaysLinkToLastBuild: false,
-                        icon: '',
-                        keepAll: false,
-                        reportDir: 'playwright-report',
-                        reportFiles: 'index.html',
-                        reportName: 'Prod E2E Report',
-                        reportTitles: '',
-                        useWrapperFileDirectly: true
-                    ])
-                }
-            }
-        }
+        //             # Run Playwright tests
+        //             npx playwright test --reporter=html
+        //         '''
+        //     }
+        //     post {
+        //         always {
+        //             // Publish production E2E report
+        //             publishHTML([
+        //                 allowMissing: false,
+        //                 alwaysLinkToLastBuild: false,
+        //                 icon: '',
+        //                 keepAll: false,
+        //                 reportDir: 'playwright-report',
+        //                 reportFiles: 'index.html',
+        //                 reportName: 'Prod E2E Report',
+        //                 reportTitles: '',
+        //                 useWrapperFileDirectly: true
+        //             ])
+        //         }
+        //     }
+        // }
     }
 }
