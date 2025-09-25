@@ -14,6 +14,42 @@ pipeline {
 
     stages {
 
+        stage('Build') {
+            agent {
+                docker {
+                    image 'node:18-alpine' // Use lightweight Node.js Docker image
+                    reuseNode true // Reuse the workspace across stages
+                }
+            }
+            steps {
+                sh '''
+                    # List files in workspace
+                    ls -la
+
+                    # Show Node and npm versions
+                    node --version
+                    npm --version
+
+                    # Install dependencies using clean install
+                    npm ci
+
+                    # Build the project
+                    npm run build
+                    echo 'build completed'
+
+                    # List files after build
+                    ls -la
+                '''
+            }
+        }
+        
+        stage('Build Docker Image') {
+            steps {
+                // Build a Docker image named 'my-playwright' using the Dockerfile in the current directory
+                sh 'docker build -t my-playwright .'
+            }
+        }
+
         stage('Deploy to AWS') {
             agent {
                 docker {
@@ -44,35 +80,6 @@ pipeline {
                         aws ecs wait services-stable --cluster $AWS_ECS_CLUSTER --services $AWS_ECS_SERVICE_PROD
                     '''
                 }
-            }
-        }
-
-        stage('Build') {
-            agent {
-                docker {
-                    image 'node:18-alpine' // Use lightweight Node.js Docker image
-                    reuseNode true // Reuse the workspace across stages
-                }
-            }
-            steps {
-                sh '''
-                    # List files in workspace
-                    ls -la
-
-                    # Show Node and npm versions
-                    node --version
-                    npm --version
-
-                    # Install dependencies using clean install
-                    npm ci
-
-                    # Build the project
-                    npm run build
-                    echo 'build completed'
-
-                    # List files after build
-                    ls -la
-                '''
             }
         }
 

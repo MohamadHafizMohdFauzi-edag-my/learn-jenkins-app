@@ -6,7 +6,7 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 // Build a Docker image named 'my-playwright' using the Dockerfile in the current directory
-                sh 'docker build -t my-playwright .'
+                sh 'docker build -f ci/Dockerfile -t my-playwright .'
             }
         }
     }
