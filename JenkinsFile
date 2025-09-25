@@ -44,9 +44,21 @@ pipeline {
         }
         
         stage('Build Docker Image') {
+
+            agent {
+                docker {
+                    image 'amazon/aws-cli' // Use AWS CLI Docker image
+                    reuseNode true // Reuse workspace
+                    args "-u root -v /var/run/docker.sock:/var/run/docker.sock --entrypoint=''" // Override default entrypoint to allow shell commands
+                }
+            }
+
             steps {
                 // Build a Docker image named 'my-playwright' using the Dockerfile in the current directory
-                sh 'docker build -t my-playwright .'
+                sh '''
+                    amazon-linux-extras install docker
+                    docker build -t myjenkinsapp .
+                '''
             }
         }
 
