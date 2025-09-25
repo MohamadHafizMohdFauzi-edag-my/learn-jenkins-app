@@ -37,6 +37,8 @@ pipeline {
                         echo $LATEST_TD_REVISION
 
                         aws ecs update-service --cluster admired-gorilla-vr5k7i --service LearnJenkinsApp-TaskDefinition-Prod-service-edo5pfjw --task-definition LearnJenkinsApp-TaskDefinition-Prod:$LATEST_TD_REVISION
+
+                        aws ecs wait services-stable --cluster admired-gorilla-vr5k7i --services LearnJenkinsApp-TaskDefinition-Prod-service-edo5pfjw
                     '''
                 }
             }
